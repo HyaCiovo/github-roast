@@ -1,0 +1,204 @@
+/**
+ * Deterministic 0-100 value/trust scorer.
+ *
+ * Direct port of `score()` + `_log_ratio()` from the canonical Python skill
+ * (`github-account-value/scripts/fetch_github_profile.py`). The formula is the
+ * single source of truth for the number; the LLM only adds a bounded ±10
+ * qualitative adjustment and the prose/roast on top of this output.
+ *
+ * See `github-account-value/references/scoring_rubric.md` for the rubric.
+ */
+
+import type { RawMetrics, RedFlag, Scoring, SubScores, Tier } from "./types";
+
+/** Round to `digits` decimals (half away from zero), mirroring the script's intent. */
+function round(value: number, digits = 0): number {
+  const f = 10 ** digits;
+  return Math.round((value + Number.EPSILON) * f) / f;
+}
+
+/** 0..1 scaled with a log curve: returns 1.0 when value >= full_at. */
+export function logRatio(value: number, fullAt: number): number {
+  if (value <= 0) return 0.0;
+  return Math.min(Math.log10(value + 1) / Math.log10(fullAt + 1), 1.0);
+}
+
+export function score(m: RawMetrics): Scoring {
+  const sub: SubScores = {
+    account_maturity: 0,
+    original_project_quality: 0,
+    contribution_quality: 0,
+    external_impact: 0,
+    community_influence: 0,
+    activity_authenticity: 0,
+  };
+
+  // 1. Account Maturity (10)
+  const agePts = Math.min(m.account_age_years / 6.0, 1.0) * 7;
+  const years = m.contribution_years_active;
+  const spanPts = years === 0 ? 0 : years === 1 ? 1 : years === 2 ? 2 : 3;
+  sub.account_maturity = round(agePts + spanPts, 1);
+
+  // 2. Original Project Quality (18) — stars are gameable, so capped lower
+  if (m.nonempty_original_repo_count === 0) {
+    sub.original_project_quality = 0.0;
+  } else {
+    sub.original_project_quality = round(
+      logRatio(m.total_stars, 5000) * 11 + logRatio(m.max_stars, 2000) * 7,
+      1,
+    );
+  }
+
+  // 3. Contribution Quality (27) — merged-PR volume, acceptance, issue engagement.
+  let prVolume = logRatio(m.merged_pr_count, 200) * 16;
+  prVolume *= 1 - 0.8 * (m.self_pr_farm_ratio ?? 0.0);
+  let acceptance: number;
+  if (m.total_pr_count >= 3) {
+    acceptance = (m.merged_pr_count / m.total_pr_count) * 6;
+  } else {
+    acceptance = m.merged_pr_count * 1.2; // tiny history: ~1pt per merged
+  }
+  acceptance = Math.min(acceptance, 6.0);
+  const issuePts = logRatio(m.issues_created, 100) * 5;
+  sub.contribution_quality = round(prVolume + acceptance + issuePts, 1);
+
+  // 4. External/Ecosystem Impact (20)
+  const prestige = logRatio(m.max_external_repo_stars, 100000) * 9;
+  const depth = Math.min(m.external_depth_raw / 8.0, 1.0) * 11;
+  sub.external_impact = round(prestige + depth, 1);
+
+  // 5. Community Influence (8)
+  const followerPts = logRatio(m.followers, 2000) * 5;
+  const following = m.following;
+  const followers = m.followers;
+  let ratioPts: number;
+  if (following > 2000 && followers < following * 0.3) {
+    ratioPts = 0.0;
+  } else if (following === 0) {
+    ratioPts = followers > 0 ? 3.0 : 0.0;
+  } else {
+    const ratio = followers / following;
+    ratioPts = ratio >= 2 ? 3 : ratio >= 1 ? 2 : ratio >= 0.5 ? 1.5 : 1;
+  }
+  sub.community_influence = round(followerPts + ratioPts, 1);
+
+  // 6. Activity Authenticity (17)
+  const contribPts = logRatio(m.last_year_contributions, 2000) * 8;
+  const days = m.days_since_last_activity;
+  let recencyPts: number;
+  if (days === null) recencyPts = 0.0;
+  else if (days <= 90) recencyPts = 4.5;
+  else if (days <= 365) recencyPts = 2.0;
+  else recencyPts = 0.0;
+  const diversityPts = Math.min(m.activity_type_count, 4) * 1.125;
+  sub.activity_authenticity = round(contribPts + recencyPts + diversityPts, 1);
+
+  const base = round(
+    Object.values(sub).reduce((a, b) => a + b, 0),
+    1,
+  );
+
+  // Red flags (penalties)
+  const flags: RedFlag[] = [];
+  const flag = (name: string, penalty: number, detail: string): void => {
+    flags.push({ flag: name, penalty, detail });
+  };
+
+  const fetched = Math.max(m.fetched_repo_count, 1);
+  if (m.account_age_years < 1 && m.public_repos > 30) {
+    flag(
+      "new_account_mass_repos",
+      10,
+      `Account <1yr old with ${m.public_repos} repos — possible mass creation.`,
+    );
+  }
+  if (m.fork_repo_count / fetched > 0.7 && m.nonempty_original_repo_count <= 2) {
+    flag(
+      "mostly_forks",
+      10,
+      `${m.fork_repo_count}/${fetched} repos are forks with little original work.`,
+    );
+  }
+  if (m.nonempty_original_repo_count === 0) {
+    flag("no_original_work", 10, "No non-empty original repositories.");
+  }
+  if (m.empty_original_repo_count >= 5 && m.empty_original_repo_count / fetched > 0.5) {
+    flag(
+      "mostly_empty_repos",
+      5,
+      `${m.empty_original_repo_count} empty original repos — likely placeholder/spam.`,
+    );
+  }
+  if (m.following > 1000 && m.followers < m.following * 0.3) {
+    flag(
+      "follow_farming",
+      10,
+      `following ${m.following} >> followers ${m.followers} — follow-farming pattern.`,
+    );
+  }
+  if (!m.bio && m.followers < 3 && m.total_stars === 0 && m.merged_pr_count < 2) {
+    flag("ghost_profile", 8, "Empty profile with negligible footprint.");
+  }
+  if (
+    m.contribution_years_active <= 1 &&
+    m.account_age_years > 2 &&
+    (m.days_since_last_activity ?? 999) > 365
+  ) {
+    flag("burst_then_dormant", 5, "Active in only one year then dormant — burst pattern.");
+  }
+  if (m.star_inflation_suspect) {
+    flag(
+      "possible_star_inflation",
+      5,
+      "Top repo has many stars but near-zero forks/issues — possible bought stars.",
+    );
+  }
+  const sample = m.recent_merged_pr_sample;
+  if (sample >= 10 && m.recent_trivial_pr_count / sample > 0.6) {
+    flag(
+      "trivial_pr_farming",
+      8,
+      `${m.recent_trivial_pr_count}/${sample} recent merged PRs are ≤5-line changes — PR farming.`,
+    );
+  }
+  if (sample >= 10 && m.self_pr_farm_ratio > 0.6) {
+    flag(
+      "self_pr_farming",
+      6,
+      `${m.self_pr_farm_count}/${sample} recent merged PRs are self-PRs into own ~0-star ` +
+        "repos — contribution-count inflation (often AI-agent / self-review loops).",
+    );
+  }
+
+  const penalty = Math.min(
+    flags.reduce((a, f) => a + f.penalty, 0),
+    40,
+  );
+  const final = Math.max(0, Math.min(round(base - penalty), 100));
+
+  let tier: Tier;
+  let tierLabel: string;
+  if (final >= 90) {
+    tier = "夯";
+    tierLabel = "顶级开发者 · 高价值高信任";
+  } else if (final >= 70) {
+    tier = "人上人";
+    tierLabel = "优质贡献者 · 值得信任";
+  } else if (final >= 40) {
+    tier = "NPC";
+    tierLabel = "普通账号 · 特征平庸存疑";
+  } else {
+    tier = "拉完了";
+    tierLabel = "低价值 · 疑似刷量/AI 机器人";
+  }
+
+  return {
+    sub_scores: sub,
+    base_score: base,
+    red_flags: flags,
+    total_penalty: penalty,
+    final_score: final,
+    tier,
+    tier_label: tierLabel,
+  };
+}

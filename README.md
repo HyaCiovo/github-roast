@@ -1,0 +1,77 @@
+# 毒舌 GitHub 评分 · GitHub Roast 🔥
+
+输入一个 GitHub 账号，30 秒得到一份 **0–100 分**的价值与信任评分、四档等级（🏆 夯 / 💪 人上人 / 🫥 NPC / 💀 拉完了），外加一句**扎在真实数据上的毒舌点评**。专治刷量号、AI 机器人、收藏夹开发者、自产自销自审自合的 PR farmer。
+
+评分核心来自开源 Claude 技能 `github-account-value` —— 网站把它的 Python 打分逻辑 **逐行移植成 TypeScript**，并用单元测试锁定二者输出一致。
+
+## 工作原理
+
+```
+浏览器 ─▶ /api/scan ─▶ [Redis 缓存?] ─▶ lib/github.ts  (GitHub REST + GraphQL, 运营方 PAT)
+                                   └─▶ lib/score.ts   (确定性打分, 与 Python 技能一致)
+                                   └─▶ 写入缓存 24h
+        ─▶ /api/roast (流式) ─▶ lib/llm.ts (OpenAI 兼容; 默认 OpenRouter 免费; 可自带 Key)
+```
+
+- **分数是确定性的**，由 `lib/score.ts` 在服务端算出 —— 大模型改不了数字。
+- 大模型只做两件事：读 README/PR 做**至多 ±10** 的定性修正，写那句毒舌点评。所以哪怕用免费小模型也不会算错分。
+- 6 个维度（账号成熟度 / 原创项目质量 / 贡献质量 / 外部生态贡献 / 社区影响力 / 活跃真实性）+ 10 条刷量 red flag，权重向**难以造假**的信号（合并进真实仓库的 PR、持续活跃）倾斜，对**可购买**的信号（star、粉丝）压低权重。
+
+## 本地开发
+
+```bash
+pnpm install
+cp .env.example .env.local   # 填入 GITHUB_TOKEN 和 OPENROUTER_API_KEY
+pnpm dev
+```
+
+> **务必配置 `GITHUB_TOKEN`。** 没有 token 时，GitHub 的 GraphQL 贡献/活跃度/外部贡献等维度会全部归零（评分被严重低估），且 REST 限速只有 60/h。一个只读 PAT 即可把限速提到 5000/h 并解锁全部维度。
+
+### 命令
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm dev` | 本地开发 |
+| `pnpm build` / `pnpm start` | 生产构建 / 运行 |
+| `pnpm test` | Vitest 打分一致性测试（对照 Python 技能输出） |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm lint` | ESLint |
+
+## 环境变量
+
+见 [`.env.example`](./.env.example)。最小可跑只需 `GITHUB_TOKEN` + `OPENROUTER_API_KEY`；缓存、限流、人机校验在未配置时会**静默降级**（适合本地）。生产强烈建议全配齐。
+
+## 部署到 Vercel
+
+1. Push 到 GitHub，在 Vercel 导入。
+2. 配置环境变量（同上）。`UPSTASH_*` 用 Vercel 的 Upstash 集成一键开通。
+3. Cloudflare Turnstile 拿一对 site/secret key，配 `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`。
+4. Deploy。
+
+## 成本（≈ $0 / 月）
+
+| 项 | 方案 | 成本 |
+|----|------|------|
+| 托管 / Serverless | Vercel | 免费额度内 |
+| GitHub API | 运营方 PAT（5000 req/h；瓶颈是 search 30/min） | $0 |
+| 大模型 | OpenRouter `:free` 模型（按天限额）；超额转用户自带 Key | $0 |
+| 缓存 / 限流 | Upstash Redis 免费档 | $0 |
+| 人机校验 | Cloudflare Turnstile | $0 |
+
+三个杠杆把成本钉死：① 同账号 **24h 缓存**（少打 GitHub、少调模型，病毒传播时同名账号被反复扫）② **限流 + Turnstile** 挡脚本刷量 ③ **免费额度耗尽自动引导用户填自己的 Key**。
+
+## 自带模型 / API Key
+
+点页面上的「用自己的模型」，填 Base URL + API Key + Model。兼容任意 OpenAI 接口（OpenAI / OpenRouter / Groq / DeepSeek / 本地）。**Key 只存在你自己的浏览器 localStorage，调用时直传，绝不上传到服务器、绝不落库。**
+
+## 重新生成打分一致性测试的基准
+
+`src/lib/__tests__/score-fixtures.json` 是用 Python 技能的 `score()` 跑出来的 ground truth。技能公式更新后，用 `github-account-value/scripts/fetch_github_profile.py` 的 `score()` 对相同输入重跑并覆盖该文件，再 `pnpm test` 验证移植未走样。
+
+## 免责声明
+
+本站仅基于 GitHub **公开数据**自动生成评分与点评，吐槽的是账号的公开行为与数据，非针对个人，不构成事实认定，请勿用于骚扰。私有贡献不计入，可能低估私有组织的活跃员工。
+
+## License
+
+MIT
