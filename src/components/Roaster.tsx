@@ -25,10 +25,13 @@ interface Display {
 // separately below (above the leaderboard). While streaming, the marker may not
 // have arrived yet — then the whole thing is still "body" and roast stays empty.
 function splitReport(md: string): { body: string; roast: string } {
+  // Drop the leading "## <username> — <score>/100 · <tier>" heading — the card
+  // above already shows score + tier, so it would just be redundant here.
+  const stripTitle = (s: string) => s.replace(/^\s*#{1,6}\s+.*(?:\r?\n|$)/, "").trim();
   const m = md.match(/🔥\s*\*{0,2}\s*毒舌点评\s*\*{0,2}\s*[：:]/);
-  if (!m || m.index === undefined) return { body: md.trim(), roast: "" };
+  if (!m || m.index === undefined) return { body: stripTitle(md), roast: "" };
   return {
-    body: md.slice(0, m.index).trim(),
+    body: stripTitle(md.slice(0, m.index)),
     roast: md.slice(m.index + m[0].length).trim(),
   };
 }
@@ -381,6 +384,7 @@ export function Roaster() {
               tier={display.tier}
               tierLabel={display.tierLabel}
               beat={percentile?.beat ?? null}
+              tags={tags ?? { zh: [], en: [] }}
             />
           </div>
         </div>

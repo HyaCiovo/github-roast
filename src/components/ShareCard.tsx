@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useState } from "react";
 import { tierStyle } from "@/lib/tier";
-import type { Tier } from "@/lib/types";
+import type { Tags, Tier } from "@/lib/types";
 
 interface ShareCardProps {
   username: string;
@@ -12,6 +12,7 @@ interface ShareCardProps {
   tier: Tier;
   tierLabel: string;
   beat: number | null;
+  tags: Tags;
 }
 
 /**
@@ -20,10 +21,11 @@ interface ShareCardProps {
  * URL up-front so the cross-origin image never taints the export canvas.
  */
 export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function ShareCard(
-  { username, name, avatarUrl, score, tier, tierLabel, beat },
+  { username, name, avatarUrl, score, tier, tierLabel, beat, tags },
   ref,
 ) {
   const style = tierStyle(tier);
+  const shownTags = [...(tags?.zh ?? []), ...(tags?.en ?? [])].slice(0, 4);
   const [avatarData, setAvatarData] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,6 +97,20 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
           </div>
         )}
       </div>
+
+      {/* Tags */}
+      {shownTags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {shownTags.map((t, i) => (
+            <span
+              key={`${t}-${i}`}
+              className="rounded-full border border-orange-400/30 bg-orange-500/10 px-3 py-1 text-sm font-medium text-orange-200"
+            >
+              #{t}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Footer brand */}
       <div className="flex items-center justify-between text-sm">
