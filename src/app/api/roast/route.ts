@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPercentile, recordScore } from "@/lib/db";
+import { getPercentile, recordScore, updateRoast } from "@/lib/db";
 import { LlmConfig, LlmQuotaError, chatStream, defaultLlmConfig } from "@/lib/llm";
 import { beatPercent } from "@/lib/percentile";
 import { buildRoastMessages } from "@/lib/prompt";
@@ -136,6 +136,7 @@ async function computeMeta(
       tier,
       tags,
       bot_score: spamBotScore(scan.metrics),
+      sub_scores: scan.scoring.sub_scores,
       scanned_at: Date.now(),
     });
   }
@@ -235,8 +236,12 @@ export async function POST(req: NextRequest) {
           full += chunk;
           controller.enqueue(encoder.encode(chunk));
         }
-        // Cache the finished roast so repeat views don't re-spend LLM credit.
-        if (isDefault) await setCachedRoast(username, { report: full, delta, tags });
+        // Cache the finished roast so repeat views don't re-spend LLM credit,
+        // and persist it to the account row for the leaderboard detail view.
+        if (isDefault) {
+          await setCachedRoast(username, { report: full, delta, tags });
+          await updateRoast(username, full);
+        }
       } catch (e) {
         console.error("roast stream error:", e);
       } finally {

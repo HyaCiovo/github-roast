@@ -9,7 +9,7 @@
  */
 
 import { Client, createClient } from "@libsql/client";
-import type { Tags, Tier } from "./types";
+import type { SubScores, Tags, Tier } from "./types";
 
 const EMPTY_TAGS: Tags = { zh: [], en: [] };
 
@@ -52,6 +52,8 @@ function ensureSchema(db: Client): Promise<void> {
              tier         TEXT NOT NULL,
              tags         TEXT,
              bot_score    REAL,
+             sub_scores   TEXT,
+             roast        TEXT,
              hidden       INTEGER NOT NULL DEFAULT 0,
              scanned_at   INTEGER NOT NULL
            )`,
@@ -60,7 +62,7 @@ function ensureSchema(db: Client): Promise<void> {
         "write",
       );
       // Migrations for tables created before these columns existed.
-      for (const col of ["tags TEXT", "bot_score REAL"]) {
+      for (const col of ["tags TEXT", "bot_score REAL", "sub_scores TEXT", "roast TEXT"]) {
         try {
           await db.execute(`ALTER TABLE scores ADD COLUMN ${col}`);
         } catch {
@@ -85,6 +87,8 @@ export interface ScoreEntry {
   tags: Tags;
   /** Hidden 0-10 spam-PR / bot likelihood — stored, never returned to clients. */
   bot_score: number;
+  /** Per-dimension breakdown — persisted for "similar developers" matching. */
+  sub_scores: SubScores;
   scanned_at: number;
 }
 
@@ -106,8 +110,8 @@ export async function recordScore(entry: ScoreEntry): Promise<void> {
     await ensureSchema(db);
     await db.execute({
       sql: `INSERT INTO scores
-              (username, display_name, avatar_url, profile_url, final_score, tier, tags, bot_score, scanned_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              (username, display_name, avatar_url, profile_url, final_score, tier, tags, bot_score, sub_scores, scanned_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(username) DO UPDATE SET
               display_name = excluded.display_name,
               avatar_url   = excluded.avatar_url,
@@ -116,6 +120,7 @@ export async function recordScore(entry: ScoreEntry): Promise<void> {
               tier         = excluded.tier,
               tags         = excluded.tags,
               bot_score    = excluded.bot_score,
+              sub_scores   = excluded.sub_scores,
               scanned_at   = excluded.scanned_at`,
       args: [
         entry.username.toLowerCase(),
@@ -126,11 +131,32 @@ export async function recordScore(entry: ScoreEntry): Promise<void> {
         entry.tier,
         JSON.stringify(entry.tags ?? EMPTY_TAGS),
         entry.bot_score,
+        JSON.stringify(entry.sub_scores),
         entry.scanned_at,
       ],
     });
   } catch (e) {
     console.error("recordScore failed:", e);
+  }
+}
+
+/**
+ * Attach the finished roast markdown to an account row. Called after the LLM
+ * stream completes (the full text isn't known at {@link recordScore} time, which
+ * runs before streaming so the percentile reflects this scan). No-op if the row
+ * doesn't exist yet (e.g. a BYO-key roast that was never recorded).
+ */
+export async function updateRoast(username: string, roast: string): Promise<void> {
+  const db = getClient();
+  if (!db) return;
+  try {
+    await ensureSchema(db);
+    await db.execute({
+      sql: `UPDATE scores SET roast = ? WHERE username = ?`,
+      args: [roast, username.toLowerCase()],
+    });
+  } catch (e) {
+    console.error("updateRoast failed:", e);
   }
 }
 
