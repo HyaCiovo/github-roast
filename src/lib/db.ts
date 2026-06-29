@@ -139,6 +139,10 @@ function ensureSchema(db: Client): Promise<void> {
              scanned_at   INTEGER NOT NULL
            )`,
           `CREATE INDEX IF NOT EXISTS idx_scores_score ON scores(final_score DESC)`,
+          // Leaderboard & sitemap all filter `hidden = 0 AND final_score >= ?`,
+          // so a composite index lets one seek cover both conditions.
+          `CREATE INDEX IF NOT EXISTS idx_scores_hidden_score
+             ON scores(hidden, final_score DESC)`,
           `CREATE TABLE IF NOT EXISTS account_stats (
              username        TEXT PRIMARY KEY,
              lookup_count    INTEGER NOT NULL DEFAULT 0,
