@@ -25,9 +25,15 @@ import {
   emptyReactionCounts,
   isProfileReaction,
   type ProfileReaction,
+  type ProfileReactionCounts,
   type ProfileReactionState,
 } from "./reactions";
 import { computeTrendingScore, rankTrending } from "./hotness";
+import {
+  clearCachedReactionCounts,
+  getCachedReactionCounts,
+  setCachedReactionCounts,
+} from "./redis";
 import type { Lang } from "./lang";
 import type { PaperDims, PaperMode, PaperTierKey } from "./paper-types";
 import { rankSimilar } from "./similarity";
@@ -1076,25 +1082,41 @@ function validGithubId(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0;
 }
 
+/** Cache-aside read of a profile's global reaction tallies. A hit skips the
+ *  GROUP BY entirely — the hot path for crawlers and logged-out visitors. */
+async function readReactionCounts(
+  db: Client,
+  target: string,
+): Promise<ProfileReactionCounts> {
+  const cached = await getCachedReactionCounts(target);
+  if (cached) return cached;
+  const counts = emptyReactionCounts();
+  const res = await db.execute({
+    sql: `SELECT reaction, COUNT(*) AS count
+          FROM profile_reactions
+          WHERE target_username = ?
+          GROUP BY reaction`,
+    args: [target],
+  });
+  for (const row of res.rows) {
+    if (isProfileReaction(row.reaction)) counts[row.reaction] = Number(row.count) || 0;
+  }
+  await setCachedReactionCounts(target, counts);
+  return counts;
+}
+
 export async function getProfileReactionState(
   targetUsername: string,
   viewerGithubId?: number,
 ): Promise<ProfileReactionState> {
-  const counts = emptyReactionCounts();
   const db = getClient();
   const target = normalizeGitHubUsername(targetUsername);
-  if (!db || !target) return { counts, viewerReaction: null };
+  if (!db || !target) return { counts: emptyReactionCounts(), viewerReaction: null };
 
   try {
     await ensureSchema(db);
-    const [countResult, viewerResult] = await Promise.all([
-      db.execute({
-        sql: `SELECT reaction, COUNT(*) AS count
-              FROM profile_reactions
-              WHERE target_username = ?
-              GROUP BY reaction`,
-        args: [target],
-      }),
+    const [counts, viewerResult] = await Promise.all([
+      readReactionCounts(db, target),
       validGithubId(viewerGithubId ?? 0)
         ? db.execute({
             sql: `SELECT reaction
@@ -1105,9 +1127,6 @@ export async function getProfileReactionState(
         : Promise.resolve(null),
     ]);
 
-    for (const row of countResult.rows) {
-      if (isProfileReaction(row.reaction)) counts[row.reaction] = Number(row.count) || 0;
-    }
     const viewerValue = viewerResult?.rows[0]?.reaction;
     return {
       counts,
@@ -1115,7 +1134,7 @@ export async function getProfileReactionState(
     };
   } catch (e) {
     console.error("getProfileReactionState failed:", e);
-    return { counts, viewerReaction: null };
+    return { counts: emptyReactionCounts(), viewerReaction: null };
   }
 }
 
@@ -1148,6 +1167,7 @@ export async function setProfileReaction(
               updated_at = excluded.updated_at`,
       args: [target, input.voterGithubId, voterLogin, input.reaction, now, now],
     });
+    await clearCachedReactionCounts(target);
     return getProfileReactionState(target, input.voterGithubId);
   } catch (e) {
     console.error("setProfileReaction failed:", e);
@@ -1169,6 +1189,7 @@ export async function removeProfileReaction(
             WHERE target_username = ? AND voter_github_id = ?`,
       args: [target, input.voterGithubId],
     });
+    await clearCachedReactionCounts(target);
     return getProfileReactionState(target, input.voterGithubId);
   } catch (e) {
     console.error("removeProfileReaction failed:", e);
