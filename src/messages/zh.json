@@ -79,7 +79,9 @@
   },
   "header": {
     "signIn": "用 GitHub 登录",
-    "signOut": "登出"
+    "signOut": "登出",
+    "myProfile": "我的主页",
+    "judgeSelf": "检测我自己"
   },
   "loginNudge": {
     "title": "🔥 登录解锁更多玩法",
@@ -146,6 +148,12 @@
   },
   "detail": {
     "back": "← 返回名人堂",
+    "rankTitle": "我的位置",
+    "rankUnit": "/ 共 {total} 人",
+    "rankUnranked": "暂无排名（样本不足）",
+    "beatInline": "击败了 {beat}% 的开发者",
+    "milestoneNext": "距「{tier}」还差 {gap} 分",
+    "milestoneCapped": "🏆 已封顶 · 殿堂级标杆",
     "dimensionsHeading": "维度评分",
     "similarHeading": "🧬 和 TA 最像的开发者",
     "similarSub": "画像最接近、分数相近的账号",
@@ -177,6 +185,13 @@
     "salute": "服了",
     "clown": "绷不住"
   },
+  "rescan": {
+    "button": "🔄 重新检测",
+    "scanning": "检测中…",
+    "roasting": "生成点评中…",
+    "error": "检测失败，请稍后重试",
+    "cooldown": "{hours} 小时后可重新检测"
+  },
   "detailMeta": {
     "title": "{username} — {score}/100 · {tier} | 毒舌 GitHub 评分",
     "descWithTags": "{tags} —— 在 githubroast.dev 查看 {username} 的完整评分报告。",
@@ -193,6 +208,7 @@
     "roastThinking": "AI 正在憋一段毒舌点评，马上端上来…",
     "roastPending": "准备生成点评",
     "firstJudged": "🥇 你是第一个被审判的，前无古人",
+    "rankLine": "<hl>📊 全站第 {rank} 名</hl><muted> / 共 {total} 人</muted>",
     "beatLine": "<hl>🏆 超越了 {beat}%</hl><muted> 的开发者（共 {total} 人受审）</muted>",
     "saveImage": "📸 保存炫耀图",
     "saving": "生成中…",

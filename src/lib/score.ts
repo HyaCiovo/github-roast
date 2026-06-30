@@ -218,6 +218,22 @@ export function tierFor(final: number): { tier: Tier; tier_label: string } {
   return { tier: "拉完了", tier_label: "低价值 · 疑似刷量/AI 机器人" };
 }
 
+/** Ascending tier promotion thresholds, kept in sync with `tierFor`. */
+const TIER_THRESHOLDS: { threshold: number; tier: Tier }[] = [
+  { threshold: 40, tier: "NPC" },
+  { threshold: 70, tier: "人上人" },
+  { threshold: 80, tier: "顶级" },
+  { threshold: 90, tier: "夯" },
+];
+
+/**
+ * The next tier a score can be promoted into, and the score line to reach it.
+ * Returns null once already in the top tier (夯). Drives the milestone hint.
+ */
+export function nextTier(final: number): { threshold: number; tier: Tier } | null {
+  return TIER_THRESHOLDS.find((t) => final < t.threshold) ?? null;
+}
+
 export function score(m: RawMetrics): Scoring {
   const sub: SubScores = {
     account_maturity: 0,

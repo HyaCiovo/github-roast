@@ -79,7 +79,9 @@
   },
   "header": {
     "signIn": "Sign in with GitHub",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "myProfile": "My profile",
+    "judgeSelf": "Judge myself"
   },
   "loginNudge": {
     "title": "🔥 Sign in to unlock more",
@@ -146,6 +148,12 @@
   },
   "detail": {
     "back": "← Back to Hall of Fame",
+    "rankTitle": "Your standing",
+    "rankUnit": "/ of {total}",
+    "rankUnranked": "Unranked (not enough data)",
+    "beatInline": "Beat {beat}% of developers",
+    "milestoneNext": "{gap} pts to “{tier}”",
+    "milestoneCapped": "🏆 Maxed out · top tier",
     "dimensionsHeading": "Score breakdown",
     "similarHeading": "🧬 Most similar developers",
     "similarSub": "Closest profile, nearby score",
@@ -177,6 +185,13 @@
     "salute": "Salute",
     "clown": "Can't even"
   },
+  "rescan": {
+    "button": "🔄 Re-detect",
+    "scanning": "Scanning…",
+    "roasting": "Roasting…",
+    "error": "Detection failed, try again later",
+    "cooldown": "Refresh available in {hours}h"
+  },
   "detailMeta": {
     "title": "{username} — {score}/100 · {tier} | Savage GitHub Roast",
     "descWithTags": "{tags} — see {username}'s full score report on githubroast.dev.",
@@ -193,6 +208,7 @@
     "roastThinking": "The AI is cooking up a savage roast — coming right up…",
     "roastPending": "Preparing the roast",
     "firstJudged": "🥇 You're the first to be judged — a true pioneer",
+    "rankLine": "<hl>📊 Ranked #{rank}</hl><muted> of {total} developers</muted>",
     "beatLine": "<hl>🏆 Beat {beat}%</hl><muted> of developers ({total} judged so far)</muted>",
     "saveImage": "📸 Save flex image",
     "saving": "Generating…",

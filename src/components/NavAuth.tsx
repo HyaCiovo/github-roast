@@ -1,5 +1,7 @@
 import { getTranslations } from "next-intl/server";
+import { Link } from "@/i18n/navigation";
 import { auth, authConfigured, signIn, signOut } from "@/lib/auth";
+import { getScoreBrief } from "@/lib/db";
 
 /**
  * GitHub login control for the navbar. Server component: reads the session via
@@ -18,6 +20,9 @@ export async function NavAuth() {
   const user = session?.user;
 
   if (user) {
+    // "My profile" → the user's own scored page when it exists; otherwise route
+    // them to the home scan flow to judge themselves (avoids a 404 on /u/).
+    const scored = user.login ? await getScoreBrief(user.login) : null;
     return (
       <div className="flex items-center gap-2">
         {user.image ? (
@@ -29,6 +34,14 @@ export async function NavAuth() {
           />
         ) : null}
         <span className="text-sm text-zinc-300">@{user.login}</span>
+        {user.login && (
+          <Link
+            href={scored ? `/u/${user.login}` : "/"}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300 hover:bg-white/10"
+          >
+            {scored ? t("myProfile") : t("judgeSelf")}
+          </Link>
+        )}
         <form
           action={async () => {
             "use server";

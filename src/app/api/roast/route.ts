@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TIER_EN, TIER_LABEL_EN } from "@/lib/badge";
-import { getArchivedRoast, getPercentile, recordProfileSnapshot, recordScore, updateRoast } from "@/lib/db";
+import { getArchivedRoast, getRank, recordProfileSnapshot, recordScore, updateRoast } from "@/lib/db";
 import { Lang, normLang } from "@/lib/lang";
 import { LlmConfig, LlmQuotaError, chatStream, defaultLlmConfig } from "@/lib/llm";
 import { beatPercent } from "@/lib/percentile";
@@ -267,9 +267,9 @@ async function computeMeta(
 }
 
 async function percentileFor(score: number): Promise<RoastMeta["percentile"]> {
-  const counts = await getPercentile(score);
+  const counts = await getRank(score);
   return counts
-    ? { beat: beatPercent(counts.below, counts.total), total: counts.total }
+    ? { beat: beatPercent(counts.below, counts.total), total: counts.total, rank: counts.rank }
     : null;
 }
 

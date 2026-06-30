@@ -747,6 +747,40 @@ export async function getPercentile(
   }
 }
 
+/**
+ * Global score ranking for `score`: `rank` (1-based, by `final_score` desc),
+ * `total` ranked accounts, and `below` (accounts scoring strictly lower).
+ *
+ * Excludes hidden accounts so the rank lines up with what the score leaderboard
+ * shows. `rank` = (accounts scoring strictly higher) + 1. Returns null when there
+ * is no one to compare against (≤1 ranked account), matching `beatPercent`.
+ */
+export async function getRank(
+  score: number,
+): Promise<{ rank: number; total: number; below: number } | null> {
+  const db = getClient();
+  if (!db) return null;
+  try {
+    await ensureSchema(db);
+    const res = await db.execute({
+      sql: `SELECT
+              SUM(CASE WHEN final_score > ? THEN 1 ELSE 0 END) AS above,
+              SUM(CASE WHEN final_score < ? THEN 1 ELSE 0 END) AS below,
+              COUNT(*) AS total
+            FROM scores WHERE hidden = 0`,
+      args: [score, score],
+    });
+    const row = res.rows[0];
+    if (!row) return null;
+    const total = Number(row.total);
+    if (total <= 1) return null;
+    return { rank: Number(row.above) + 1, total, below: Number(row.below) };
+  } catch (e) {
+    console.error("getRank failed:", e);
+    return null;
+  }
+}
+
 /** Total number of accounts ever evaluated (for the "N developers" counter). */
 export async function getScoreCount(): Promise<number | null> {
   const db = getClient();

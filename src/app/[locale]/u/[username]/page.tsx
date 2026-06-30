@@ -10,6 +10,7 @@ import {
   getProfileComments,
   getProfileDanmaku,
   getProfileSnapshot,
+  getRank,
   getSimilarAccounts,
 } from "@/lib/db";
 import { aggregateLanguages, collectTopics } from "@/lib/profile-insights";
@@ -18,11 +19,13 @@ import { SITE_URL, PUBLIC_INDEX_MIN_SCORE } from "@/lib/site";
 import { CopyBadge } from "@/components/CopyBadge";
 import { FloatingCommentBubbles } from "@/components/FloatingCommentBubbles";
 import { TierAvatarFrame } from "@/components/TierAvatarFrame";
-import { SUBSCORE_MAX } from "@/lib/score";
+import { SUBSCORE_MAX, nextTier } from "@/lib/score";
+import { beatPercent } from "@/lib/percentile";
 import { TIER_KEY, tierStyle } from "@/lib/tier";
 import { normLang } from "@/lib/lang";
 import type { SubScoreKey } from "@/lib/types";
 import { ProfileReactionsSection } from "@/components/ProfileReactionsSection";
+import { RescanButton } from "@/components/RescanButton";
 
 // Profile comments must be fresh; score/roast data is still fetched from the DB
 // and remains cached at the persistence layer where applicable.
@@ -116,12 +119,18 @@ export default async function AccountPage({
   // visitor's language even when the full report exists only in the other one.
   // Empty for legacy rows — those still carry the one-liner inline in `roast`.
   const roastLine = lang === "en" ? d.roast_line.en : d.roast_line.zh;
-  const [similar, comments, snap, danmaku] = await Promise.all([
+  const [similar, comments, snap, danmaku, rank] = await Promise.all([
     getSimilarAccounts(d.username, d.final_score, d.sub_scores),
     getProfileComments(d.username),
     getProfileSnapshot(d.username),
     getProfileDanmaku(d.username),
+    getRank(d.final_score),
   ]);
+  // Milestone hint: points to the next tier line, plus the "beat %" so far.
+  const promo = nextTier(d.final_score);
+  const promoGap = promo ? (promo.threshold - d.final_score).toFixed(2) : null;
+  const promoTierName = promo ? tTier(`${TIER_KEY[promo.tier]}.name`) : null;
+  const beat = rank ? beatPercent(rank.below, rank.total) : null;
   const detailPath = locale === "en" ? `/en/u/${d.username}` : `/u/${d.username}`;
 
   // Evidence blocks (only when a sedimented snapshot exists). Featured work =
@@ -260,6 +269,37 @@ export default async function AccountPage({
             ))}
           </div>
         )}
+      </div>
+
+      {/* My standing — concrete rank, "beat %", a milestone hint to the next
+          tier, and an inline re-detect button to refresh the score. */}
+      <div className="mt-5 rounded-2xl border border-orange-300/15 bg-orange-500/[0.04] p-4 text-center">
+        <div className="text-xs font-medium uppercase tracking-wide text-orange-200/80">
+          {t("rankTitle")}
+        </div>
+        {rank ? (
+          <>
+            <div className={`mt-1 text-4xl font-black tabular-nums ${style.text}`}>
+              #{rank.rank}
+              <span className="ml-1 text-sm font-medium text-zinc-500">
+                {t("rankUnit", { total: rank.total })}
+              </span>
+            </div>
+            {beat != null && (
+              <div className="mt-0.5 text-xs text-zinc-400">
+                {t("beatInline", { beat: beat.toFixed(1) })}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="mt-1 text-sm text-zinc-400">{t("rankUnranked")}</div>
+        )}
+        <div className="mt-2 text-xs text-zinc-300">
+          {promo
+            ? t("milestoneNext", { tier: promoTierName!, gap: promoGap! })
+            : t("milestoneCapped")}
+        </div>
+        <RescanButton username={d.username} scannedAt={d.scanned_at} className="mt-3" />
       </div>
 
       <Suspense

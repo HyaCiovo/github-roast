@@ -245,3 +245,33 @@ describe("getTrendingLeaderboard", () => {
     expect(entries[0]?.username).toBe("fresh");
   });
 });
+
+describe("getRank", () => {
+  it("ranks by score desc over a shared population", async () => {
+    await db.recordScore({ ...entry, username: "rank-low", final_score: 11 });
+    await db.recordScore({ ...entry, username: "rank-mid", final_score: 22 });
+    await db.recordScore({ ...entry, username: "rank-high", final_score: 33 });
+
+    const low = await db.getRank(11);
+    const mid = await db.getRank(22);
+    const high = await db.getRank(33);
+    expect(low && mid && high).toBeTruthy();
+    // A higher score earns a smaller (better) rank number.
+    expect(high!.rank).toBeLessThan(mid!.rank);
+    expect(mid!.rank).toBeLessThan(low!.rank);
+    // Every query measures the same population, and `below` tracks the score.
+    expect(high!.total).toBe(low!.total);
+    expect(high!.total).toBeGreaterThanOrEqual(3);
+    expect(high!.below).toBeGreaterThan(mid!.below);
+  });
+
+  it("excludes hidden accounts from the ranking", async () => {
+    const before = await db.getRank(22);
+    await db.recordScore({ ...entry, username: "rank-hidden", final_score: 99 });
+    await db.hideUser("rank-hidden");
+    const after = await db.getRank(22);
+    // A hidden high score neither inflates the total nor worsens the rank.
+    expect(after!.total).toBe(before!.total);
+    expect(after!.rank).toBe(before!.rank);
+  });
+});

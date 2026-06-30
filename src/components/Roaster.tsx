@@ -43,9 +43,11 @@ export function Roaster() {
   const [error, setError] = useState("");
   const [byoOpen, setByoOpen] = useState(false);
   const [byoReason, setByoReason] = useState<string | undefined>();
-  const [percentile, setPercentile] = useState<{ beat: number | null; total: number } | null>(
-    null,
-  );
+  const [percentile, setPercentile] = useState<{
+    beat: number | null;
+    total: number;
+    rank: number | null;
+  } | null>(null);
   const [display, setDisplay] = useState<Display | null>(null);
   const [tags, setTags] = useState<Tags | null>(null);
   // Bilingual one-liner from the X-Roast-Meta header (arrives before the body
@@ -394,13 +396,25 @@ export function Roaster() {
               (percentile.beat === null ? (
                 <div className="mt-3 text-sm text-zinc-300">{t("firstJudged")}</div>
               ) : (
-                <div className="mt-3 text-sm">
-                  {t.rich("beatLine", {
-                    beat: percentile.beat.toFixed(1),
-                    total: percentile.total,
-                    hl: (c) => <span className={`font-semibold ${style.text}`}>{c}</span>,
-                    muted: (c) => <span className="text-zinc-400">{c}</span>,
-                  })}
+                <div className="mt-3 space-y-1 text-sm">
+                  {percentile.rank != null && (
+                    <div>
+                      {t.rich("rankLine", {
+                        rank: percentile.rank,
+                        total: percentile.total,
+                        hl: (c) => <span className={`font-semibold ${style.text}`}>{c}</span>,
+                        muted: (c) => <span className="text-zinc-400">{c}</span>,
+                      })}
+                    </div>
+                  )}
+                  <div>
+                    {t.rich("beatLine", {
+                      beat: percentile.beat.toFixed(1),
+                      total: percentile.total,
+                      hl: (c) => <span className={`font-semibold ${style.text}`}>{c}</span>,
+                      muted: (c) => <span className="text-zinc-400">{c}</span>,
+                    })}
+                  </div>
                 </div>
               ))}
 

@@ -203,7 +203,7 @@ export interface RoastMeta {
   tier: Tier;
   tier_label: string;
   delta: number;
-  percentile: { beat: number | null; total: number } | null;
+  percentile: { beat: number | null; total: number; rank: number | null } | null;
   tags: Tags;
   /** Bilingual savage one-liner; the UI shows the side matching the locale. */
   roast_line: RoastLine;
