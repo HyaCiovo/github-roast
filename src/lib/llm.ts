@@ -74,11 +74,26 @@ export class LlmTimeoutError extends Error {}
 const CONNECT_TIMEOUT_MS = 30_000;
 const IDLE_TIMEOUT_MS = 30_000;
 
-export async function* chatStream(
+/** A single streamed event: the model's hidden reasoning (chain-of-thought) or
+ *  user-facing answer content. Reasoning is surfaced only as a liveness signal
+ *  (a "still thinking" heartbeat) — never rendered to users, since a reasoning
+ *  model's CoT leaks internal scoring fields the report is required to hide. */
+export interface ChatEvent {
+  type: "reasoning" | "content";
+  text: string;
+}
+
+/**
+ * Stream a chat completion as typed events. Reasoning deltas (`reasoning_content`
+ * / `reasoning`, emitted by reasoning models like StepFun's flash tiers ahead of
+ * any answer) are yielded as `{type:"reasoning"}`; answer tokens as
+ * `{type:"content"}`. {@link chatStream} wraps this to the content-only view.
+ */
+export async function* chatStreamEvents(
   config: LlmConfig,
   messages: ChatMessage[],
   opts?: { temperature?: number; connectTimeoutMs?: number; idleTimeoutMs?: number },
-): AsyncGenerator<string> {
+): AsyncGenerator<ChatEvent> {
   const base = config.baseURL.replace(/\/$/, "");
   const connectMs = opts?.connectTimeoutMs ?? CONNECT_TIMEOUT_MS;
   const idleMs = opts?.idleTimeoutMs ?? IDLE_TIMEOUT_MS;
@@ -155,10 +170,14 @@ export async function* chatStream(
         if (data === "[DONE]") return;
         try {
           const json = JSON.parse(data) as {
-            choices?: { delta?: { content?: string } }[];
+            choices?: {
+              delta?: { content?: string; reasoning_content?: string; reasoning?: string };
+            }[];
           };
-          const delta = json.choices?.[0]?.delta?.content;
-          if (delta) yield delta;
+          const delta = json.choices?.[0]?.delta;
+          const reasoning = delta?.reasoning_content ?? delta?.reasoning;
+          if (reasoning) yield { type: "reasoning", text: reasoning };
+          if (delta?.content) yield { type: "content", text: delta.content };
         } catch {
           // ignore keep-alive / partial frames
         }
@@ -169,5 +188,20 @@ export async function* chatStream(
     // Abort the underlying connection if the consumer stops pulling early (client
     // disconnect) so we don't leak a half-read upstream stream.
     if (!ctrl.signal.aborted) ctrl.abort();
+  }
+}
+
+/**
+ * Content-only view of {@link chatStreamEvents}: yields just the answer text
+ * deltas, dropping reasoning. Unchanged behaviour for all existing callers
+ * (judge, danmaku, paper) that only care about the final text.
+ */
+export async function* chatStream(
+  config: LlmConfig,
+  messages: ChatMessage[],
+  opts?: { temperature?: number; connectTimeoutMs?: number; idleTimeoutMs?: number },
+): AsyncGenerator<string> {
+  for await (const ev of chatStreamEvents(config, messages, opts)) {
+    if (ev.type === "content") yield ev.text;
   }
 }

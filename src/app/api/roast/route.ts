@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { TIER_EN, TIER_LABEL_EN } from "@/lib/badge";
 import { getArchivedRoast, getRank, recordProfileSnapshot, recordScore, updateRoast } from "@/lib/db";
 import { Lang, normLang } from "@/lib/lang";
-import { LlmConfig, LlmQuotaError, chatStream, defaultLlmConfig } from "@/lib/llm";
+import { LlmConfig, LlmQuotaError, chatStreamEvents, defaultLlmConfig } from "@/lib/llm";
 import { beatPercent } from "@/lib/percentile";
 import { buildRoastJudgeMessages, buildRoastMessages } from "@/lib/prompt";
 import { reportMatchesLang } from "@/lib/report";
@@ -21,11 +21,12 @@ import type { RoastJudgeResult, RoastLine, RoastMeta, ScanResult, Tags, Tier } f
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Two sequential LLM calls (judge → roast) plus the streamed report. The platform
-// clamps this to the plan max; without it a cold request can hit the default
-// (~10–15s) limit mid-generation and 504. The llm.ts idle timeout still bounds a
-// stalled upstream well inside this ceiling.
-export const maxDuration = 60;
+// Two sequential LLM calls (judge → roast) plus the streamed report, and the
+// default model is a reasoning model that spends 10–25s on chain-of-thought
+// before any visible content. Give the function generous headroom so a slow
+// account never hits the platform ceiling mid-generation and 504s; the llm.ts
+// idle timeout (30s) still bounds a genuinely stalled upstream well inside this.
+export const maxDuration = 300;
 
 /** Response header carrying the AI-adjusted score (base64'd JSON; it contains CJK). */
 export const ROAST_META_HEADER = "X-Roast-Meta";
@@ -112,18 +113,6 @@ function extractReport(head: string): string {
   if (idx >= 0) return lines.slice(idx).join("\n");
   // No heading found (model ignored format) — just drop any control lines.
   return lines.filter((l) => !/@@(ADJUST|TAGS|ROAST)/.test(l)).join("\n").replace(/^\n+/, "");
-}
-
-async function readStreamText(
-  generator: AsyncGenerator<string>,
-  maxChars = 12000,
-): Promise<string> {
-  let text = "";
-  for await (const chunk of generator) {
-    text += chunk;
-    if (text.length >= maxChars) return text.slice(0, maxChars);
-  }
-  return text;
 }
 
 function parseJudgeResult(raw: string, scan: ScanResult, lang: Lang): RoastJudgeResult {
@@ -215,6 +204,40 @@ function roastResponse(body: ReadableStream<Uint8Array> | string, meta: RoastMet
       [ROAST_META_HEADER]: metaHeader(meta),
     },
   });
+}
+
+/** Deterministic (pre-LLM) meta for the streaming response's header. The header
+ *  must be sent before the body, but the AI-adjusted score/tags/roast aren't
+ *  known until after generation — so the header carries the script's own score
+ *  (a safe fallback) and the real values arrive later as an in-band M-frame. */
+function deterministicMeta(scan: ScanResult, lang: Lang): RoastMeta {
+  const { tier, tier_label: zhLabel } = tierFor(scan.scoring.final_score);
+  const tier_label = lang === "en" ? TIER_LABEL_EN[tier] : zhLabel;
+  return {
+    final_score: scan.scoring.final_score,
+    tier,
+    tier_label,
+    delta: 0,
+    percentile: null,
+    tags: { zh: [], en: [] },
+    roast_line: EMPTY_ROAST_LINE,
+  };
+}
+
+// In-band control protocol for the streamed generate path. Frames are single
+// lines prefixed with US (\x1f, never produced by the model/markdown) and end
+// with \n: `T`=thinking/progress label, `M`=base64 RoastMeta (ends the control
+// phase; everything after is report markdown), `E`=JSON error. The cached/replay
+// fast paths send plain report bytes with no frames, which the client also handles.
+const FRAME = "\x1f";
+function thinkingFrame(enc: TextEncoder, text: string): Uint8Array {
+  return enc.encode(FRAME + "T" + text.replace(/\s+/g, " ").trim().slice(0, 80) + "\n");
+}
+function metaFrame(enc: TextEncoder, meta: RoastMeta): Uint8Array {
+  return enc.encode(FRAME + "M" + metaHeader(meta) + "\n");
+}
+function errorFrame(enc: TextEncoder, obj: unknown): Uint8Array {
+  return enc.encode(FRAME + "E" + JSON.stringify(obj) + "\n");
 }
 
 function adjustedScoreSummary(
@@ -436,73 +459,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  let judge: RoastJudgeResult;
-  try {
-    const judgeText = await readStreamText(
-      chatStream(config, buildRoastJudgeMessages(scan, lang)),
-    );
-    judge = parseJudgeResult(judgeText, scan, lang);
-  } catch (e) {
-    if (isLeader) await releaseRoastLock(username, lang);
-    if (e instanceof LlmQuotaError) {
-      return NextResponse.json(
-        { error: "llm_quota", useByoKey: true, status: e.status },
-        { status: 402 },
-      );
-    }
-    console.error("roast judge failed:", e);
-    return NextResponse.json({ error: "roast_failed" }, { status: 502 });
-  }
-
-  const generator = chatStream(config, buildRoastMessages(scan, lang, judge));
-
-  // Read the leading control lines (`@@ADJUST@@` + `@@TAGS@@` + `@@ROAST@@`)
-  // before streaming — i.e. up to the report heading. Pulling tokens up-front also
-  // surfaces quota/auth failures as a JSON status code. The cap is generous since
-  // @@ROAST@@ now carries a full bilingual sentence ahead of the heading.
-  let head = "";
-  try {
-    while (!/(^|\n)\s*##\s/.test(head) && head.length < 2000) {
-      const { done, value } = await generator.next();
-      if (done) break;
-      head += value;
-    }
-  } catch (e) {
-    // Release the single-flight lock so waiting requests aren't stalled for the
-    // full lock TTL by a generation that died before it ever streamed.
-    if (isLeader) await releaseRoastLock(username, lang);
-    if (e instanceof LlmQuotaError) {
-      return NextResponse.json(
-        { error: "llm_quota", useByoKey: true, status: e.status },
-        { status: 402 },
-      );
-    }
-    console.error("roast failed:", e);
-    return NextResponse.json({ error: "roast_failed" }, { status: 502 });
-  }
-
-  const parsedDelta = parseDelta(head);
-  const delta = parsedDelta === judge.delta ? parsedDelta : judge.delta;
-  const parsedTags = parseTags(head);
-  const parsedRoastLine = parseRoast(head);
-  const parsedReport = extractReport(head);
-  const { tags, roastLine, report } = sanitizeIdentityClaims(
-    scan,
-    parsedTags,
-    parsedRoastLine,
-    parsedReport,
-  );
-
-  const meta = await computeMeta(scan, delta, tags, roastLine, isDefault, lang);
-
-  const encoder = new TextEncoder();
+  // Stream from the very first byte. The default model is a reasoning model that
+  // spends 10–25s "thinking" before any visible content, and we run TWO passes
+  // (cold judge → savage writer); the old code awaited both fully before sending
+  // anything, so the user stared at a frozen spinner the whole time. Now we open
+  // the response immediately and push live progress (T-frames) during the wait,
+  // then the AI-adjusted meta (M-frame), then the report — same two-pass logic,
+  // same quality, no frozen wait.
+  const enc = new TextEncoder();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
-      let full = report;
       let clientGone = false;
-      // If the client disconnects mid-stream, enqueue throws. Swallow it and keep
-      // draining the generator so the (already in-flight, already paid-for) roast
-      // still lands in cache — otherwise the next viewer re-spends LLM credit.
       const push = (bytes: Uint8Array) => {
         if (clientGone) return;
         try {
@@ -511,11 +478,108 @@ export async function POST(req: NextRequest) {
           clientGone = true;
         }
       };
+      const close = () => {
+        try {
+          controller.close();
+        } catch {
+          // already closed (client gone)
+        }
+      };
+      // Surface "still working" without leaking the model's chain-of-thought:
+      // a curated stage label plus elapsed seconds, throttled so reasoning's
+      // hundreds of deltas don't spam the wire.
+      const t0 = Date.now();
+      let lastBeat = 0;
+      const beat = (label: string, force = false) => {
+        const now = Date.now();
+        if (!force && now - lastBeat < 1500) return;
+        lastBeat = now;
+        const secs = Math.round((now - t0) / 1000);
+        push(thinkingFrame(enc, `${label} (${secs}s)`));
+      };
+      const calibrating = lang === "en" ? "Calibrating score…" : "正在校准评分…";
+      const writing = lang === "en" ? "Writing the roast…" : "正在撰写锐评…";
+      const failAndClose = async (obj: unknown) => {
+        // Release the single-flight lock so waiting requests aren't stalled for
+        // the full lock TTL by a generation that died early.
+        if (isLeader) await releaseRoastLock(username, lang);
+        push(errorFrame(enc, obj));
+        close();
+      };
+
+      // 1) Cold judge pass (score calibration). Reasoning → calibrating heartbeat.
+      let judge: RoastJudgeResult;
       try {
-        if (report) push(encoder.encode(report));
-        for await (const chunk of generator) {
-          full += chunk;
-          push(encoder.encode(chunk));
+        beat(calibrating, true);
+        let judgeText = "";
+        for await (const ev of chatStreamEvents(config, buildRoastJudgeMessages(scan, lang))) {
+          if (ev.type === "content") {
+            judgeText += ev.text;
+            if (judgeText.length >= 12000) break;
+          } else {
+            beat(calibrating);
+          }
+        }
+        judge = parseJudgeResult(judgeText, scan, lang);
+      } catch (e) {
+        if (e instanceof LlmQuotaError) {
+          return failAndClose({ error: "llm_quota", useByoKey: true, status: e.status });
+        }
+        console.error("roast judge failed:", e);
+        return failAndClose({ error: "roast_failed" });
+      }
+
+      // 2) Savage writer pass. Read the leading control lines (@@ADJUST@@ /
+      // @@TAGS@@ / @@ROAST@@) up to the report heading; reasoning → writing beat.
+      beat(writing, true);
+      const events = chatStreamEvents(config, buildRoastMessages(scan, lang, judge));
+      let head = "";
+      try {
+        while (!/(^|\n)\s*##\s/.test(head) && head.length < 2000) {
+          const { done, value } = await events.next();
+          if (done) break;
+          if (value.type === "content") head += value.text;
+          else beat(writing);
+        }
+      } catch (e) {
+        if (e instanceof LlmQuotaError) {
+          return failAndClose({ error: "llm_quota", useByoKey: true, status: e.status });
+        }
+        console.error("roast failed:", e);
+        return failAndClose({ error: "roast_failed" });
+      }
+
+      const parsedDelta = parseDelta(head);
+      const delta = parsedDelta === judge.delta ? parsedDelta : judge.delta;
+      const parsedTags = parseTags(head);
+      const parsedRoastLine = parseRoast(head);
+      const parsedReport = extractReport(head);
+      const { tags, roastLine, report } = sanitizeIdentityClaims(
+        scan,
+        parsedTags,
+        parsedRoastLine,
+        parsedReport,
+      );
+
+      let meta: RoastMeta;
+      try {
+        meta = await computeMeta(scan, delta, tags, roastLine, isDefault, lang);
+      } catch (e) {
+        console.error("roast meta failed:", e);
+        return failAndClose({ error: "roast_failed" });
+      }
+
+      // End of control phase: ship the AI-adjusted meta, then the report body.
+      push(metaFrame(enc, meta));
+
+      let full = report;
+      try {
+        if (report) push(enc.encode(report));
+        // Drain the rest of the writer (resumes where head-reading left off).
+        for await (const ev of events) {
+          if (ev.type !== "content") continue;
+          full += ev.text;
+          push(enc.encode(ev.text));
         }
         // Cache the finished roast so repeat views don't re-spend LLM credit,
         // and persist it to the account row for the leaderboard detail view.
@@ -536,14 +600,10 @@ export async function POST(req: NextRequest) {
         console.error("roast stream error:", e);
       } finally {
         if (isLeader) await releaseRoastLock(username, lang);
-        try {
-          controller.close();
-        } catch {
-          // already closed (client gone)
-        }
+        close();
       }
     },
   });
 
-  return roastResponse(stream, meta);
+  return roastResponse(stream, deterministicMeta(scan, lang));
 }

@@ -38,6 +38,9 @@ export function Roaster() {
   const [token, setToken] = useState("");
   const [scanning, setScanning] = useState(false);
   const [roasting, setRoasting] = useState(false);
+  // Live progress label streamed from the server during the (slow, reasoning-model)
+  // judge → roast wait, so the card shows "正在校准评分… (8s)" instead of a frozen spinner.
+  const [thinking, setThinking] = useState("");
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [report, setReport] = useState("");
   const [error, setError] = useState("");
@@ -60,6 +63,51 @@ export function Roaster() {
       setRoasting(true);
       setReport("");
       setMetaRoast(null);
+      setThinking("");
+
+      // Decode a base64 RoastMeta (header fast path or in-band M-frame) into the
+      // score card / tags / one-liner.
+      const applyMeta = (b64: string) => {
+        try {
+          const json = new TextDecoder().decode(
+            Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)),
+          );
+          const meta = JSON.parse(json) as RoastMeta;
+          setDisplay({
+            score: meta.final_score,
+            tier: meta.tier,
+            tierLabel: meta.tier_label,
+            delta: meta.delta,
+          });
+          setPercentile(meta.percentile);
+          if (meta.tags && (meta.tags.zh.length || meta.tags.en.length)) setTags(meta.tags);
+          if (meta.roast_line && (meta.roast_line.zh || meta.roast_line.en))
+            setMetaRoast(meta.roast_line);
+        } catch {
+          /* malformed meta — keep the deterministic display */
+        }
+      };
+      // Map a server error (preflight JSON or in-band E-frame) to the BYO modal /
+      // inline error, then stop. Returns true if it was an error.
+      const handleError = (data: { error?: string; useByoKey?: boolean }): boolean => {
+        if (data?.useByoKey) {
+          setByoReason(
+            data.error === "llm_quota"
+              ? t("byoReasonQuota")
+              : data.error === "rate_limited"
+                ? t("byoReasonRate")
+                : t("byoReasonDefault"),
+          );
+          setByoOpen(true);
+          return true;
+        }
+        if (data?.error) {
+          setError(t("errRoastFailed"));
+          return true;
+        }
+        return false;
+      };
+
       const byoKey: ByoKeyConfig | null = loadByoKey();
       try {
         const res = await fetch("/api/roast", {
@@ -71,55 +119,63 @@ export function Roaster() {
 
         if (!res.ok || !res.body) {
           const data = await res.json().catch(() => ({}));
-          if (data?.useByoKey) {
-            setByoReason(
-              data.error === "llm_quota"
-                ? t("byoReasonQuota")
-                : data.error === "rate_limited"
-                  ? t("byoReasonRate")
-                  : t("byoReasonDefault"),
-            );
-            setByoOpen(true);
-            setRoasting(false);
-            return;
-          }
-          setError(t("errRoastFailed"));
+          if (!handleError(data)) setError(t("errRoastFailed"));
           setRoasting(false);
           return;
         }
 
-        // The AI-adjusted score + percentile arrive as a header (base64 JSON), so
-        // the streamed body is pure markdown — no in-band parsing to get wrong.
+        // The header carries a deterministic meta fallback (sent before the body
+        // can know the AI-adjusted values); the real meta arrives as an M-frame.
         const metaHeader = res.headers.get("X-Roast-Meta");
-        if (metaHeader) {
-          try {
-            const json = new TextDecoder().decode(
-              Uint8Array.from(atob(metaHeader), (c) => c.charCodeAt(0)),
-            );
-            const meta = JSON.parse(json) as RoastMeta;
-            setDisplay({
-              score: meta.final_score,
-              tier: meta.tier,
-              tierLabel: meta.tier_label,
-              delta: meta.delta,
-            });
-            setPercentile(meta.percentile);
-            if (meta.tags && (meta.tags.zh.length || meta.tags.en.length)) setTags(meta.tags);
-            if (meta.roast_line && (meta.roast_line.zh || meta.roast_line.en))
-              setMetaRoast(meta.roast_line);
-          } catch {
-            /* malformed meta — keep the deterministic display */
-          }
-        }
+        if (metaHeader) applyMeta(metaHeader);
 
+        // The streamed body is plain report markdown EXCEPT for leading control
+        // frames (see the server's FRAME protocol): \x1f-prefixed lines carrying
+        // progress (T), the adjusted meta (M, ends the control phase), or an
+        // error (E). The cached fast path sends pure markdown with no frames.
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
+        let buf = "";
+        let inReport = false;
         let acc = "";
+        let aborted = false;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          acc += decoder.decode(value, { stream: true });
-          setReport(acc);
+          buf += decoder.decode(value, { stream: true });
+
+          while (!inReport && buf.length > 0) {
+            // Anything not starting with the frame separator is report content.
+            if (buf[0] !== "\x1f") {
+              inReport = true;
+              break;
+            }
+            const nl = buf.indexOf("\n");
+            if (nl === -1) break; // partial control line — wait for more bytes
+            const type = buf[1];
+            const payload = buf.slice(2, nl);
+            buf = buf.slice(nl + 1);
+            if (type === "T") {
+              setThinking(payload);
+            } else if (type === "M") {
+              applyMeta(payload);
+              inReport = true;
+            } else if (type === "E") {
+              try {
+                handleError(JSON.parse(payload));
+              } catch {
+                setError(t("errRoastFailed"));
+              }
+              aborted = true;
+              break;
+            }
+          }
+          if (aborted) break;
+          if (inReport && buf) {
+            acc += buf;
+            buf = "";
+            setReport(acc);
+          }
         }
       } catch {
         setError(t("errNetworkRoast"));
@@ -149,6 +205,7 @@ export function Roaster() {
       setDisplay(null);
       setTags(null);
       setMetaRoast(null);
+      setThinking("");
       setScanning(true);
       try {
         const res = await fetch("/api/scan", {
@@ -372,8 +429,8 @@ export function Roaster() {
                     <span className="h-2 w-2 animate-bounce rounded-full bg-orange-400 [animation-delay:-0.15s]" />
                     <span className="h-2 w-2 animate-bounce rounded-full bg-orange-400" />
                   </div>
-                  <div className="text-sm text-zinc-400">
-                    {roasting ? t("roastThinking") : t("roastPending")}
+                  <div className="text-sm text-zinc-400 tabular-nums">
+                    {roasting ? thinking || t("roastThinking") : t("roastPending")}
                   </div>
                 </div>
               )}

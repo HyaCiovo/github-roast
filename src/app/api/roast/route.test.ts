@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   recordScore: vi.fn(),
   recordProfileSnapshot: vi.fn(),
   updateRoast: vi.fn(),
-  chatStream: vi.fn(),
+  chatStreamEvents: vi.fn(),
   defaultLlmConfig: vi.fn(),
   acquireRoastLock: vi.fn(),
   checkRoastRateLimit: vi.fn(),
@@ -61,7 +61,7 @@ vi.mock("@/lib/llm", () => {
   }
   return {
     LlmQuotaError,
-    chatStream: mocks.chatStream,
+    chatStreamEvents: mocks.chatStreamEvents,
     defaultLlmConfig: mocks.defaultLlmConfig,
   };
 });
@@ -109,8 +109,8 @@ vi.mock("@/lib/score", () => ({
 
 import { POST } from "./route";
 
-async function* streamText(text: string): AsyncGenerator<string> {
-  yield text;
+async function* streamText(text: string): AsyncGenerator<{ type: "content"; text: string }> {
+  yield { type: "content", text };
 }
 
 const scan: ScanResult = {
@@ -197,7 +197,7 @@ beforeEach(() => {
   mocks.updateRoast.mockResolvedValue(undefined);
   mocks.setCachedRoast.mockResolvedValue(undefined);
   mocks.releaseRoastLock.mockResolvedValue(undefined);
-  mocks.chatStream
+  mocks.chatStreamEvents
     .mockReturnValueOnce(streamText(`{"delta":3,"reason":"ok","verdict":"正常","risk_notes":[]}`))
     .mockReturnValueOnce(
       streamText(
