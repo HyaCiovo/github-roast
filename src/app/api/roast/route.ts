@@ -5,6 +5,7 @@ import { Lang, normLang } from "@/lib/lang";
 import {
   LlmConfig,
   LlmQuotaError,
+  LlmTimeoutError,
   chatStreamEventsWithFallback,
   defaultLlmConfig,
   fallbackLlmConfig,
@@ -53,6 +54,27 @@ interface RoastBody {
   byoKey?: ByoKey;
   /** UI locale → report language. Defaults to zh (see {@link normLang}). */
   lang?: string;
+}
+
+/** Map a thrown LLM error to a coarse failure kind for the triage log. */
+function classifyLlmError(e: unknown): "timeout" | "quota" | "upstream" | "other" {
+  if (e instanceof LlmTimeoutError) return "timeout";
+  if (e instanceof LlmQuotaError) return "quota";
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/^LLM (error \d|request failed)/.test(msg)) return "upstream";
+  return "other";
+}
+
+/** One structured line per roast (success or failure) for prod triage. Failure
+ *  rows carry the stage (judge|writer|meta|stream) and kind (timeout|quota|
+ *  upstream|other) so we can tell a slow-LLM timeout from an upstream 5xx from a
+ *  parse miss without reading code. Never let logging throw into the roast path. */
+function logRoastSummary(fields: Record<string, unknown>): void {
+  try {
+    console.log("roast.summary", JSON.stringify(fields));
+  } catch {
+    /* ignore */
+  }
 }
 
 function clientIp(req: NextRequest): string {
@@ -509,6 +531,10 @@ export async function POST(req: NextRequest) {
       // passes combined so a slow account fails gracefully here (roast_failed)
       // instead of the platform 504'ing the whole function.
       const llmDeadlineMs = t0 + 105_000;
+      // Per-stage timings for the structured triage log (see logRoastSummary).
+      const path = isDefault ? "default" : "byo";
+      let judgeMs = 0;
+      let writerStart = 0;
       let lastBeat = 0;
       const beat = (label: string, force = false) => {
         const now = Date.now();
@@ -543,7 +569,12 @@ export async function POST(req: NextRequest) {
           }
         }
         judge = parseJudgeResult(judgeText, scan, lang);
+        judgeMs = Date.now() - t0;
       } catch (e) {
+        logRoastSummary({
+          u: username, lang, path, ok: false, stage: "judge",
+          kind: classifyLlmError(e), judgeMs: Date.now() - t0,
+        });
         if (e instanceof LlmQuotaError) {
           return failAndClose({ error: "llm_quota", useByoKey: true, status: e.status });
         }
@@ -554,6 +585,7 @@ export async function POST(req: NextRequest) {
       // 2) Savage writer pass. Read the leading control lines (@@ADJUST@@ /
       // @@TAGS@@ / @@ROAST@@) up to the report heading; reasoning → writing beat.
       beat(writing, true);
+      writerStart = Date.now();
       const events = chatStreamEventsWithFallback(llmConfigs, buildRoastMessages(scan, lang, judge), {
         deadlineMs: llmDeadlineMs,
       });
@@ -566,6 +598,11 @@ export async function POST(req: NextRequest) {
           else beat(writing);
         }
       } catch (e) {
+        logRoastSummary({
+          u: username, lang, path, ok: false, stage: "writer",
+          kind: classifyLlmError(e), judgeMs, writerMs: Date.now() - writerStart,
+          head: head.slice(0, 200),
+        });
         if (e instanceof LlmQuotaError) {
           return failAndClose({ error: "llm_quota", useByoKey: true, status: e.status });
         }
@@ -589,6 +626,10 @@ export async function POST(req: NextRequest) {
       try {
         meta = await computeMeta(scan, delta, tags, roastLine, isDefault, lang);
       } catch (e) {
+        logRoastSummary({
+          u: username, lang, path, ok: false, stage: "meta",
+          judgeMs, writerMs: Date.now() - writerStart,
+        });
         console.error("roast meta failed:", e);
         return failAndClose({ error: "roast_failed" });
       }
@@ -620,7 +661,16 @@ export async function POST(req: NextRequest) {
           );
           await updateRoast(username, full, lang);
         }
+        logRoastSummary({
+          u: username, lang, path, ok: true,
+          judgeMs, writerMs: Date.now() - writerStart, totalMs: Date.now() - t0,
+          score: meta.final_score, delta, chars: full.length,
+        });
       } catch (e) {
+        logRoastSummary({
+          u: username, lang, path, ok: false, stage: "stream",
+          kind: classifyLlmError(e), judgeMs, writerMs: Date.now() - writerStart,
+        });
         console.error("roast stream error:", e);
       } finally {
         if (isLeader) await releaseRoastLock(username, lang);
