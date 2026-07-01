@@ -81,9 +81,47 @@ pnpm dev
 | `pnpm dev` | 本地开发 |
 | `pnpm start` 或 `pnpm build/start` | 一键生产构建并运行 |
 | `pnpm build` / `pnpm start:prod` | 仅构建 / 运行已有生产构建 |
+| `pnpm github-roast` | 面向 agent 的 CLI,封装网站 `/api/scan` + `/api/roast` API |
 | `pnpm test` | Vitest 测试套件(打分、prompt、DB、UI helper、reaction 等) |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm lint` | ESLint |
+
+### Agent CLI
+
+CLI 是网站 API 的远程调用封装,不会在本地运行 GitHub 扫描、评分或 LLM
+逻辑。
+
+```bash
+pnpm github-roast commands --json
+pnpm github-roast score hikariming -o json
+pnpm github-roast roast hikariming --lang zh -o markdown
+```
+
+构建独立二进制:
+
+```bash
+pnpm cli:build
+./bin/github-roast commands --json
+./bin/github-roast roast hikariming --lang zh -o markdown
+./bin/github-roast leaderboard --view trending --window all -o json
+./bin/github-roast developers --type language -o json
+```
+
+默认服务端域名是 `https://ghfind.com`。本地联调可以覆盖:
+
+```bash
+GITHUB_ROAST_HOST=http://localhost:3000 pnpm github-roast roast hikariming --lang zh
+```
+
+生产环境的 `/api/scan` 对浏览器走 Turnstile。agent/CLI 调用可以在服务端设置
+`GITHUB_ROAST_CLI_API_KEY`,并在 CLI 侧用 `GITHUB_ROAST_API_KEY` 或
+`--api-key` 传入;CLI 会向同一个 `/api/scan` 端点发送
+`Authorization: Bearer ...`。
+
+`/api/scan` 会先检查机器认证或 Turnstile,然后才读取 scan 缓存或使用服务端
+GitHub token。如果生产环境没有配置 `GITHUB_ROAST_CLI_API_KEY` 且启用了
+Turnstile,未认证的 CLI 请求可能在查缓存之前就失败,即使服务端本身有
+GitHub token 和 Redis 缓存。
 
 ## 环境变量
 

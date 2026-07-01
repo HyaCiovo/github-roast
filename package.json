@@ -3,12 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
+  "bin": {
+    "github-roast": "src/cli/github-roast.mjs"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "cli:build": "make cli-build",
+    "cli:build-all": "make cli-build-all",
+    "cli:test": "make cli-test",
     "start": "next build && next start",
     "start:prod": "next start",
     "build/start": "next build && next start",
+    "github-roast": "node src/cli/github-roast.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
