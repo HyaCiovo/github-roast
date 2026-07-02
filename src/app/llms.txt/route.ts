@@ -28,10 +28,31 @@ export function GET() {
 - User card:   ${SITE_URL}/api/card/{username}
 - Versus card: ${SITE_URL}/api/card/vs/{a}/{b}
 
+## Programmatic API (for agents & tools)
+
+- Machine-readable spec: ${SITE_URL}/openapi.json
+- Get a score:          GET  ${SITE_URL}/api/score/{username}   (no auth, deterministic, no LLM; scores unseen accounts live on demand; 404 only if the GitHub login doesn't exist)
+- Full scan payload:    POST ${SITE_URL}/api/scan  { "username": "..." }  (deterministic engine, no LLM; metrics + repo/PR signals)
+- Roast report:         POST ${SITE_URL}/api/roast  (LLM; pass "byoKey" to use your own model)
+- Head-to-head battle:  POST ${SITE_URL}/api/vs-verdict  { "a": "...", "b": "..." }
+- Leaderboards:         GET  ${SITE_URL}/api/leaderboard?view=trending|score|heat|progress&window=all|24h|7d|30d
+- Developer discovery:  GET  ${SITE_URL}/api/developers?type=language|org|repo&value={facet}
+- Platform stats:       GET  ${SITE_URL}/api/stats
+
+## Official SDKs
+
+- JavaScript / TypeScript (npm):  ghfind   —  npm install ghfind
+- Python (PyPI):                  ghfind   —  pip install ghfind
+
+Both wrap the endpoints above as atomic methods (getScore, scan, roast, vs,
+leaderboard, developers, searchUsers, stats). Scoring is deterministic and never
+calls an LLM; roast/vs prose is the only LLM part and supports bring-your-own key.
+
 ## Notes
 
 - Usernames are GitHub logins (case-insensitive).
 - Scores below 60 are reachable and shareable but not indexed.
+- The deterministic scoring engine is open-sourced as the github-account-value skill.
 `;
   return new Response(body, {
     headers: {
