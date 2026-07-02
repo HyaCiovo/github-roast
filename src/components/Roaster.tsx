@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Link } from "@/i18n/navigation";
 import { DIMENSIONS } from "@/lib/dimensions";
 import { splitReport } from "@/lib/report";
 import { TIER_KEY, tierStyle } from "@/lib/tier";
@@ -401,15 +402,13 @@ export function Roaster() {
             className={`animate-pop mx-auto flex max-w-3xl flex-col items-center rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center ring-1 ${style.ring}`}
             style={{ boxShadow: `0 0 80px -20px ${style.glow}` }}
           >
-            <a
-              href={scan.metrics.profile_url ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href={`/u/${scan.metrics.username}`}
               className={`max-w-full break-all rounded-full bg-black/35 px-4 py-1.5 text-xl font-black leading-tight ${style.text} ring-1 ${style.ring} hover:bg-black/45`}
               style={{ boxShadow: `0 0 28px -10px ${style.glow}` }}
             >
               @{scan.metrics.username}
-            </a>
+            </Link>
             <TierAvatarFrame
               username={scan.metrics.username}
               avatarUrl={scan.metrics.avatar_url}

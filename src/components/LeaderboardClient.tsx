@@ -228,7 +228,6 @@ export function LeaderboardClient({
           // time window, cumulative lookups for "all".
           const heat = timeWindow === "all" ? e.lookup_count : recentLookupCount;
           const heatValue = initialView === "trending" ? recentLookupCount : heat;
-          const profileUrl = e.profile_url ?? `https://github.com/${encodeURIComponent(e.username)}`;
           const scoreLabel = (
             <span className={style.text}>
               {style.emoji} {tierName}
@@ -351,14 +350,13 @@ export function LeaderboardClient({
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                    <a
-                      href={profileUrl}
-                      target="_blank"
-                      rel="noreferrer"
+                    <Link
+                      href={`/u/${e.username}`}
+                      prefetch={false}
                       className="relative z-10 max-w-full truncate font-medium underline-offset-2 hover:underline"
                     >
                       @{e.username}
-                    </a>
+                    </Link>
                     {e.display_name && (
                       <span className="min-w-0 max-w-full truncate text-sm text-zinc-500">
                         {e.display_name}
