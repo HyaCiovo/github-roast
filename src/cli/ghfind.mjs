@@ -208,7 +208,7 @@ function printAuthStatus(flags) {
 }
 
 function printHelp() {
-  print("github-roast CLI");
+  print("ghfind CLI");
   print("");
   print("Remote CLI for the ghfind.com GitHub Roast website APIs.");
   print("");

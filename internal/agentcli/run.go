@@ -321,7 +321,7 @@ func runAuthStatus(opts globalOptions, stdout io.Writer) int {
 }
 
 func printHelp(stdout io.Writer) {
-	fmt.Fprintln(stdout, "github-roast CLI")
+	fmt.Fprintln(stdout, "ghfind CLI")
 	fmt.Fprintln(stdout)
 	fmt.Fprintln(stdout, "Remote CLI for the ghfind.com GitHub Roast website APIs.")
 	fmt.Fprintln(stdout)

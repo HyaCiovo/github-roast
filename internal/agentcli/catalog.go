@@ -23,7 +23,7 @@ type Arg struct {
 var commandCatalog = []CommandInfo{
 	{
 		Name:    "scan",
-		Usage:   "github-roast scan <username> [-o json|pretty]",
+		Usage:   "ghfind scan <username> [-o json|pretty]",
 		Summary: "Call the website /api/scan endpoint and return the scan payload.",
 		API:     []string{"POST /api/scan"},
 		Output:  []string{"json", "pretty"},
@@ -36,7 +36,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:    "score",
-		Usage:   "github-roast score <username> [-o json|pretty]",
+		Usage:   "ghfind score <username> [-o json|pretty]",
 		Summary: "Call /api/scan and print only the scoring summary.",
 		API:     []string{"POST /api/scan"},
 		Output:  []string{"json", "pretty"},
@@ -49,7 +49,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:    "roast",
-		Usage:   "github-roast roast <username> [--lang zh|en] [-o json|markdown|pretty]",
+		Usage:   "ghfind roast <username> [--lang zh|en] [-o json|markdown|pretty]",
 		Summary: "Call /api/scan, then pass the returned scan to the website /api/roast endpoint.",
 		API:     []string{"POST /api/scan", "POST /api/roast"},
 		Output:  []string{"json", "markdown", "pretty"},
@@ -62,7 +62,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:    "auth status",
-		Usage:   "github-roast auth status [--host <url>]",
+		Usage:   "ghfind auth status [--host <url>]",
 		Summary: "Show the CLI target host and whether local machine-call credentials are configured.",
 		API:     []string{},
 		Output:  []string{"json", "pretty"},
@@ -72,7 +72,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:              "stats",
-		Usage:             "github-roast stats [-o json|pretty]",
+		Usage:             "ghfind stats [-o json|pretty]",
 		Summary:           "Call /api/stats and return the platform's scored-account count.",
 		API:               []string{"GET /api/stats"},
 		Output:            []string{"json", "pretty"},
@@ -84,7 +84,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:              "leaderboard",
-		Usage:             "github-roast leaderboard [--view trending|score|heat|progress] [--window all|24h|7d|30d] [-o json|pretty]",
+		Usage:             "ghfind leaderboard [--view trending|score|heat|progress] [--window all|24h|7d|30d] [-o json|pretty]",
 		Summary:           "Call /api/leaderboard and return ranked public profile entries.",
 		API:               []string{"GET /api/leaderboard"},
 		Output:            []string{"json", "pretty"},
@@ -96,7 +96,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:              "developers",
-		Usage:             "github-roast developers --type language|org|repo [--value <facet>] [-o json|pretty]",
+		Usage:             "ghfind developers --type language|org|repo [--value <facet>] [-o json|pretty]",
 		Summary:           "Call /api/developers and return developer discovery facets or one facet bucket.",
 		API:               []string{"GET /api/developers"},
 		Output:            []string{"json", "pretty"},
@@ -108,7 +108,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:    "commands",
-		Usage:   "github-roast commands [--json]",
+		Usage:   "ghfind commands [--json]",
 		Summary: "List agent-callable CLI commands.",
 		API:     []string{},
 		Output:  []string{"json", "pretty"},
@@ -118,7 +118,7 @@ var commandCatalog = []CommandInfo{
 	},
 	{
 		Name:    "commands show",
-		Usage:   "github-roast commands show <command> [--json]",
+		Usage:   "ghfind commands show <command> [--json]",
 		Summary: "Show one command's arguments, auth requirements, output formats, and website API calls.",
 		API:     []string{},
 		Output:  []string{"json", "pretty"},

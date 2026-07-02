@@ -7,5 +7,5 @@ var (
 )
 
 func VersionString() string {
-	return "github-roast " + Version + " (" + Commit + ", " + Date + ")"
+	return "ghfind " + Version + " (" + Commit + ", " + Date + ")"
 }

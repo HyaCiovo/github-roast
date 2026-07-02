@@ -3,7 +3,7 @@ export const DEFAULT_HOST = "https://ghfind.com";
 export const commandCatalog = [
   {
     name: "scan",
-    usage: "github-roast scan <username> [-o json|pretty]",
+    usage: "ghfind scan <username> [-o json|pretty]",
     summary: "Call the website /api/scan endpoint and return the scan payload.",
     api: ["POST /api/scan"],
     output: ["json", "pretty"],
@@ -18,7 +18,7 @@ export const commandCatalog = [
   },
   {
     name: "score",
-    usage: "github-roast score <username> [-o json|pretty]",
+    usage: "ghfind score <username> [-o json|pretty]",
     summary: "Call /api/scan and print only the scoring summary.",
     api: ["POST /api/scan"],
     output: ["json", "pretty"],
@@ -33,7 +33,7 @@ export const commandCatalog = [
   },
   {
     name: "roast",
-    usage: "github-roast roast <username> [--lang zh|en] [-o json|markdown|pretty]",
+    usage: "ghfind roast <username> [--lang zh|en] [-o json|markdown|pretty]",
     summary: "Call /api/scan, then pass the returned scan to the website /api/roast endpoint.",
     api: ["POST /api/scan", "POST /api/roast"],
     output: ["json", "markdown", "pretty"],
@@ -48,7 +48,7 @@ export const commandCatalog = [
   },
   {
     name: "auth status",
-    usage: "github-roast auth status [--host <url>]",
+    usage: "ghfind auth status [--host <url>]",
     summary: "Show the CLI target host and whether local machine-call credentials are configured.",
     api: [],
     output: ["json", "pretty"],
@@ -58,7 +58,7 @@ export const commandCatalog = [
   },
   {
     name: "stats",
-    usage: "github-roast stats [-o json|pretty]",
+    usage: "ghfind stats [-o json|pretty]",
     summary: "Call /api/stats and return the platform's scored-account count.",
     api: ["GET /api/stats"],
     output: ["json", "pretty"],
@@ -72,7 +72,7 @@ export const commandCatalog = [
   },
   {
     name: "leaderboard",
-    usage: "github-roast leaderboard [--view trending|score|heat|progress] [--window all|24h|7d|30d] [-o json|pretty]",
+    usage: "ghfind leaderboard [--view trending|score|heat|progress] [--window all|24h|7d|30d] [-o json|pretty]",
     summary: "Call /api/leaderboard and return ranked public profile entries.",
     api: ["GET /api/leaderboard"],
     output: ["json", "pretty"],
@@ -86,7 +86,7 @@ export const commandCatalog = [
   },
   {
     name: "developers",
-    usage: "github-roast developers --type language|org|repo [--value <facet>] [-o json|pretty]",
+    usage: "ghfind developers --type language|org|repo [--value <facet>] [-o json|pretty]",
     summary: "Call /api/developers and return developer discovery facets or one facet bucket.",
     api: ["GET /api/developers"],
     output: ["json", "pretty"],
@@ -100,7 +100,7 @@ export const commandCatalog = [
   },
   {
     name: "commands",
-    usage: "github-roast commands [--json]",
+    usage: "ghfind commands [--json]",
     summary: "List agent-callable CLI commands.",
     api: [],
     output: ["json", "pretty"],
@@ -110,7 +110,7 @@ export const commandCatalog = [
   },
   {
     name: "commands show",
-    usage: "github-roast commands show <command> [--json]",
+    usage: "ghfind commands show <command> [--json]",
     summary: "Show one command's arguments, auth requirements, output formats, and website API calls.",
     api: [],
     output: ["json", "pretty"],

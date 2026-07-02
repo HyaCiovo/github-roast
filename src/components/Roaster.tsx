@@ -274,7 +274,7 @@ export function Roaster() {
     badgeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const fileName = () => `github-roast-${scan?.metrics.username ?? "score"}.png`;
+  const fileName = () => `ghfind-${scan?.metrics.username ?? "score"}.png`;
 
   const genCardBlob = async (): Promise<Blob | null> => {
     if (!cardRef.current) return null;

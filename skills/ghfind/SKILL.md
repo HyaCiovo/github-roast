@@ -56,15 +56,15 @@ Do not call `/api/cli/*`; no separate CLI API exists.
 Start by discovering commands:
 
 ```bash
-pnpm github-roast commands --json
-pnpm github-roast commands show roast --json
+pnpm ghfind commands --json
+pnpm ghfind commands show roast --json
 ```
 
 When a standalone binary is available, prefer it:
 
 ```bash
-./bin/github-roast commands --json
-./bin/github-roast commands show roast --json
+./bin/ghfind commands --json
+./bin/ghfind commands show roast --json
 ```
 
 ## Common Calls
@@ -72,43 +72,43 @@ When a standalone binary is available, prefer it:
 Platform overview and discovery:
 
 ```bash
-./bin/github-roast stats -o json
-./bin/github-roast leaderboard --view trending --window all -o json
-./bin/github-roast developers --type language -o json
-./bin/github-roast developers --type org --value apache -o json
+./bin/ghfind stats -o json
+./bin/ghfind leaderboard --view trending --window all -o json
+./bin/ghfind developers --type language -o json
+./bin/ghfind developers --type org --value apache -o json
 ```
 
 Scan a user and return raw website scan JSON:
 
 ```bash
-pnpm github-roast scan <username> -o json
+pnpm ghfind scan <username> -o json
 ```
 
 Return only the deterministic scoring summary:
 
 ```bash
-pnpm github-roast score <username> -o json
+pnpm ghfind score <username> -o json
 ```
 
 Generate a full report:
 
 ```bash
-pnpm github-roast roast <username> --lang zh -o json
-pnpm github-roast roast <username> --lang en -o markdown
+pnpm ghfind roast <username> --lang zh -o json
+pnpm ghfind roast <username> --lang en -o markdown
 ```
 
 Equivalent standalone binary calls:
 
 ```bash
-./bin/github-roast scan <username> -o json
-./bin/github-roast score <username> -o json
-./bin/github-roast roast <username> --lang zh -o json
+./bin/ghfind scan <username> -o json
+./bin/ghfind score <username> -o json
+./bin/ghfind roast <username> --lang zh -o json
 ```
 
 Check local CLI credentials:
 
 ```bash
-pnpm github-roast auth status -o json
+pnpm ghfind auth status -o json
 ```
 
 ## Response Semantics

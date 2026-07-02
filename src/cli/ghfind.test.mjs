@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { run } from "./github-roast.mjs";
+import { run } from "./ghfind.mjs";
 
 const originalStdoutWrite = process.stdout.write;
 const originalStderrWrite = process.stderr.write;
@@ -30,7 +30,7 @@ const scanPayload = {
   cached: false,
 };
 
-describe("github-roast CLI", () => {
+describe("ghfind CLI", () => {
   let stdout = "";
 
   beforeEach(() => {

@@ -10,7 +10,7 @@ Turn any public GitHub profile into a **0–100 value & trust score**, an honest
 
 **English** · [中文](./README.zh.md)
 
-[**🔥 Roast a GitHub profile**](https://ghfind.com/en) · [**🏆 Explore developers**](https://ghfind.com/en/leaderboard) · [**⭐ View source**](https://github.com/hikariming/github-roast)
+[**🔥 Roast a GitHub profile**](https://ghfind.com/en) · [**🏆 Explore developers**](https://ghfind.com/en/leaderboard) · [**⭐ View source**](https://github.com/hikariming/ghfind)
 
 </div>
 
@@ -81,7 +81,7 @@ pnpm dev
 | `pnpm dev` | Local development |
 | `pnpm start` or `pnpm build/start` | One-command production build + run |
 | `pnpm build` / `pnpm start:prod` | Build only / run an existing production build |
-| `pnpm github-roast` | Agent-friendly CLI wrapper around the website `/api/scan` + `/api/roast` APIs |
+| `pnpm ghfind` | Agent-friendly CLI wrapper around the website `/api/scan` + `/api/roast` APIs |
 | `pnpm test` | Vitest test suite (scoring, prompts, DB, UI helpers, reactions, etc.) |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm lint` | ESLint |
@@ -92,25 +92,25 @@ The CLI is a thin remote wrapper around the public website APIs. It does **not**
 run GitHub scanning, scoring, or LLM logic locally.
 
 ```bash
-pnpm github-roast commands --json
-pnpm github-roast score hikariming -o json
-pnpm github-roast roast hikariming --lang en -o markdown
+pnpm ghfind commands --json
+pnpm ghfind score hikariming -o json
+pnpm ghfind roast hikariming --lang en -o markdown
 ```
 
 For a standalone binary:
 
 ```bash
 pnpm cli:build
-./bin/github-roast commands --json
-./bin/github-roast roast hikariming --lang en -o markdown
-./bin/github-roast leaderboard --view trending --window all -o json
-./bin/github-roast developers --type language -o json
+./bin/ghfind commands --json
+./bin/ghfind roast hikariming --lang en -o markdown
+./bin/ghfind leaderboard --view trending --window all -o json
+./bin/ghfind developers --type language -o json
 ```
 
 The default service host is `https://ghfind.com`. Override it for local dev:
 
 ```bash
-GITHUB_ROAST_HOST=http://localhost:3000 pnpm github-roast roast hikariming --lang en
+GITHUB_ROAST_HOST=http://localhost:3000 pnpm ghfind roast hikariming --lang en
 ```
 
 Production `/api/scan` uses Turnstile for browser calls. For agent/CLI calls,
@@ -182,10 +182,10 @@ Licensed under **[GNU AGPL-3.0](./LICENSE)**.
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=hikariming%2Fgithub-roast&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=hikariming%2Fghfind&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=hikariming/github-roast&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=hikariming/github-roast&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=hikariming/github-roast&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=hikariming/ghfind&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=hikariming/ghfind&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=hikariming/ghfind&type=date&legend=top-left" />
  </picture>
 </a>
