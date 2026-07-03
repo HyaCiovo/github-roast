@@ -105,7 +105,6 @@
   },
   "challenge": {
     "bannerTitle": "Came from @{owner}'s profile? See how you stack up against them",
-    "bannerSub": "Start a head-to-head and find out who's stronger.",
     "cta": "Challenge them",
     "go": "Fight",
     "inputPlaceholder": "Your GitHub username",

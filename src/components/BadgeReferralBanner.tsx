@@ -31,12 +31,11 @@ export function BadgeReferralBanner({
   if (dismissed) return null;
 
   return (
-    <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-orange-400/40 bg-orange-500/[0.1] p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-orange-400/40 bg-orange-500/[0.1] p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-orange-100">
           {t("bannerTitle", { owner })}
         </p>
-        <p className="mt-0.5 text-xs text-orange-200/70">{t("bannerSub")}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <ChallengeCta

@@ -105,7 +105,6 @@
   },
   "challenge": {
     "bannerTitle": "从 @{owner} 的主页来的？测测你在 TA 面前是什么成色",
-    "bannerSub": "一键拉起对线，看看谁更能打。",
     "cta": "和 TA 对线",
     "go": "开打",
     "inputPlaceholder": "输入你的 GitHub 用户名",

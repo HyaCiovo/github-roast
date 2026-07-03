@@ -250,12 +250,12 @@ export default async function AccountPage({
             scannedAt: d.scanned_at,
           })}
         />
-        {showBadgeBanner && (
-          <BadgeReferralBanner owner={d.username} signal={badgeSignal!} />
-        )}
         <Link href="/leaderboard" prefetch={false} className="text-sm text-zinc-400 hover:text-zinc-200">
           {t("back")}
         </Link>
+        {showBadgeBanner && (
+          <BadgeReferralBanner owner={d.username} signal={badgeSignal!} />
+        )}
 
       <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start">
         {/* Left: sticky identity sidebar — score stays visible while reading */}

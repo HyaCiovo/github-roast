@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "license": "AGPL-3.0-or-later",
-  "bin": {
-    "ghfind": "src/cli/ghfind.mjs"
-  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,7 +12,6 @@
     "start": "next build && next start",
     "start:prod": "next start",
     "build/start": "next build && next start",
-    "ghfind": "node src/cli/ghfind.mjs",
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
