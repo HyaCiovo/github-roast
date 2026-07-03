@@ -50,6 +50,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     entry("/leaderboard", { changeFrequency: "hourly", priority: 0.9 }),
     entry("/developers", { changeFrequency: "daily", priority: 0.9 }),
     entry("/vs", { changeFrequency: "daily", priority: 0.8 }),
+    entry("/methodology", { changeFrequency: "monthly", priority: 0.7 }),
+    entry("/about", { changeFrequency: "monthly", priority: 0.5 }),
+    entry("/contact", { changeFrequency: "monthly", priority: 0.4 }),
+    entry("/privacy", { changeFrequency: "yearly", priority: 0.3 }),
   ];
 
   // Blog posts: synchronous fs reads, no timeout guard needed. `entry()` emits

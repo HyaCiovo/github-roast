@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { routing } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
-import { JsonLd, articleJsonLd } from "@/components/JsonLd";
+import { JsonLd, articleJsonLd, datasetJsonLd } from "@/components/JsonLd";
 import { PostBody } from "@/components/blog/PostBody";
 import { getPost, getPostSlugs, postAlternates } from "@/lib/blog";
 
@@ -30,7 +30,11 @@ export async function generateMetadata({
   return {
     title: `${post.title} · ghfind`,
     description: post.description,
-    alternates: postAlternates(locale, slug, post.availableLocales),
+    alternates: {
+      ...postAlternates(locale, slug, post.availableLocales),
+      // Per-page markdown twin (served via the /blog/{slug}.md rewrite).
+      types: { "text/markdown": `/blog/${slug}.md` },
+    },
     openGraph: {
       title: post.title,
       description: post.description,
@@ -68,6 +72,18 @@ export default async function BlogPostPage({
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-5 py-14 sm:py-20">
       <JsonLd data={articleJsonLd(post)} />
+      {post.tags.includes("data") && (
+        <JsonLd
+          data={datasetJsonLd({
+            slug,
+            locale,
+            name: post.title,
+            description: post.description,
+            date: post.date,
+            updated: post.updated,
+          })}
+        />
+      )}
       <article>
         <header>
           <Link
